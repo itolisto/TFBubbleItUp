@@ -5,6 +5,8 @@
 //  Created by Aleš Kocur on 12/09/15.
 //  Copyright © 2015 The Funtasty. All rights reserved.
 //
+//  Edited by Edgar Gomez on 01/04/16.
+//  Delegates now return index of tags plus new delegate method when tags are deleted
 
 import UIKit
 
@@ -21,7 +23,7 @@ protocol TFBubbleItUpViewCellDelegate {
 }
 
 class TFBubbleItUpViewCell: UICollectionViewCell, UITextFieldDelegate {
-
+    
     var textField: UITextField!
     
     var mode: TFBubbleItUpViewCellMode = .View
@@ -36,7 +38,7 @@ class TFBubbleItUpViewCell: UICollectionViewCell, UITextFieldDelegate {
         // Initialization code
         self.clipsToBounds = true
     }
-
+    
     override init(frame: CGRect) {
         super.init(frame: frame)
         self.commonInit()
@@ -69,9 +71,9 @@ class TFBubbleItUpViewCell: UICollectionViewCell, UITextFieldDelegate {
         
         self.textField.delegate = self
         
-        self.textField.addTarget(self, action: Selector("editingChanged:"), forControlEvents: UIControlEvents.EditingChanged)
-        self.textField.addTarget(self, action: Selector("editingDidBegin:"), forControlEvents: UIControlEvents.EditingDidBegin)
-        self.textField.addTarget(self, action: Selector("editingDidEnd:"), forControlEvents: UIControlEvents.EditingDidEnd)
+        self.textField.addTarget(self, action: #selector(TFBubbleItUpViewCell.editingChanged(_:)), forControlEvents: UIControlEvents.EditingChanged)
+        self.textField.addTarget(self, action: #selector(TFBubbleItUpViewCell.editingDidBegin(_:)), forControlEvents: UIControlEvents.EditingDidBegin)
+        self.textField.addTarget(self, action: #selector(TFBubbleItUpViewCell.editingDidEnd(_:)), forControlEvents: UIControlEvents.EditingDidEnd)
         
         // Setup appearance
         self.textField.borderStyle = UITextBorderStyle.None
@@ -83,11 +85,11 @@ class TFBubbleItUpViewCell: UICollectionViewCell, UITextFieldDelegate {
         self.textField.autocorrectionType = TFBubbleItUpViewConfiguration.autoCorrection
         
         self.setMode(.View)
-
+        
     }
     
     func setMode(mode: TFBubbleItUpViewCellMode) {
-
+        
         var m = mode
         
         if self.textField.text == "" { // If textfield is empty he should look like ready for editing

@@ -5,6 +5,8 @@
 //  Created by Aleš Kocur on 12/09/15.
 //  Copyright © 2015 The Funtasty. All rights reserved.
 //
+//  Edited by Edgar Gomez on 01/04/16.
+//  Delegates now return index of tags plus new delegate method when tags are deleted
 
 import UIKit
 
@@ -23,9 +25,9 @@ enum DataSourceOperationError: ErrorType {
 }
 
 @objc public protocol TFBubbleItUpViewDelegate {
-    func bubbleItUpViewDidFinishEditingBubble(view: TFBubbleItUpView, text: String)
-    
-    optional func bubbleItUpViewDidChange(view: TFBubbleItUpView, text: String)
+    func bubbleItUpViewDidFinishEditingBubble(view: TFBubbleItUpView, text: String, index: Int)
+    func bubbleItUpViewDidDeleteBubbles(view: TFBubbleItUpView, text: String, actualIndex: Int, otherIndex: Int)
+    optional func bubbleItUpViewDidChange(view: TFBubbleItUpView, text: String, index: Int)
 }
 
 @IBDesignable public class TFBubbleItUpView: UICollectionView, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, UICollectionViewDataSource, UIGestureRecognizerDelegate, TFBubbleItUpViewCellDelegate {
@@ -74,7 +76,7 @@ enum DataSourceOperationError: ErrorType {
             layout.minimumLineSpacing = TFBubbleItUpViewConfiguration.lineSpacing
         }
         
-        self.tapRecognizer = UITapGestureRecognizer(target: self, action: Selector("didTapOnView:"))
+        self.tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(TFBubbleItUpView.didTapOnView(_:)))
         self.addGestureRecognizer(self.tapRecognizer)
     }
     
@@ -102,9 +104,13 @@ enum DataSourceOperationError: ErrorType {
     
     public func setStringItems(items: [String]) {
         // Set new items
-        let bubbleItems = items.map({ (text) -> TFBubbleItem in
-            return TFBubbleItem(text: text)
-        })
+        var bubbleItems : [TFBubbleItem] = []
+        var index : Int = 1
+        
+        for text in items {
+            bubbleItems.append(TFBubbleItem(text: text))
+            index += 1
+        }
         
         self.setItems(bubbleItems)
     }
@@ -201,9 +207,9 @@ enum DataSourceOperationError: ErrorType {
             self.performBatchUpdates({ () -> Void in
                 let newLastIndexPath = NSIndexPath(forItem: self.items.count - 1, inSection: 0)
                 self.insertItemsAtIndexPaths([newLastIndexPath])
-                }) { (finished) -> Void in
-                    // Invalidate intrinsic size when done
-                    self.invalidateIntrinsicContentSize(completion)
+            }) { (finished) -> Void in
+                // Invalidate intrinsic size when done
+                self.invalidateIntrinsicContentSize(completion)
             }
         }
         
@@ -223,10 +229,9 @@ enum DataSourceOperationError: ErrorType {
         self.performBatchUpdates({ () -> Void in
             let newLastIndexPath = NSIndexPath(forItem: i, inSection: 0)
             self.deleteItemsAtIndexPaths([newLastIndexPath])
-            
-            }) { (finished) -> Void in
-                // Invalidate intrinsic size when done
-                self.invalidateIntrinsicContentSize(nil)
+        }) { (finished) -> Void in
+            // Invalidate intrinsic size when done
+            self.invalidateIntrinsicContentSize(nil)
         }
         
         return true
@@ -261,8 +266,8 @@ enum DataSourceOperationError: ErrorType {
             UIView.animateWithDuration(0.2, animations: { () -> Void in
                 self.invalidateIntrinsicContentSize()
                 
-                }) { (finished) -> Void in
-                    completionBlock?()
+            }) { (finished) -> Void in
+                completionBlock?()
             }
         } else {
             //self.invalidateIntrinsicContentSize()
@@ -298,14 +303,15 @@ enum DataSourceOperationError: ErrorType {
                 self.placeholderLabel.hidden = true
             }
             
-            self.items.append(TFBubbleItem(text: "", becomeFirstResponder: true)) // insert new data item at the end
+            // insert new data item at the end
+            self.items.append(TFBubbleItem(text: "", becomeFirstResponder: true))
             
             // Update collectionView
             self.performBatchUpdates({ () -> Void in
                 self.insertItemsAtIndexPaths([NSIndexPath(forItem: self.items.count - 1, inSection:0)])
-                }) { (finished) -> Void in
-                    // Invalidate intrinsic size when done
-                    self.invalidateIntrinsicContentSize(nil)
+            }) { (finished) -> Void in
+                // Invalidate intrinsic size when done
+                self.invalidateIntrinsicContentSize(nil)
             }
         }
     }
@@ -323,7 +329,7 @@ enum DataSourceOperationError: ErrorType {
     public func collectionView(collectionView: UICollectionView, cellForItemAtIndexPath indexPath: NSIndexPath) -> UICollectionViewCell {
         let cell: TFBubbleItUpViewCell = collectionView.dequeueReusableCellWithReuseIdentifier(TFBubbleItUpViewCell.identifier, forIndexPath: indexPath) as! TFBubbleItUpViewCell
         
-        cell.delegate = self;
+        cell.delegate = self
         
         let item = self.items[indexPath.item]
         cell.configureWithItem(item)
@@ -347,12 +353,16 @@ enum DataSourceOperationError: ErrorType {
     
     public func numberOfSectionsInCollectionView(collectionView: UICollectionView) -> Int {
         
-        return 1;
+        return 1
     }
     
     // MARK:- UICollectionViewFlowLayout delegate
     
     public func collectionView(collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAtIndexPath indexPath: NSIndexPath) -> CGSize {
+        
+        if indexPath.item >= self.items.count {
+            return CGSizeMake(0.0, CGFloat(TFBubbleItUpViewConfiguration.cellHeight))
+        }
         
         let item = self.items[indexPath.item]
         
@@ -369,10 +379,14 @@ enum DataSourceOperationError: ErrorType {
     
     internal func didChangeText(cell: TFBubbleItUpViewCell, text: String) {
         if let indexPath = self.indexPathForCell(cell) {
-            self.items[indexPath.item].text = text
+            if indexPath.item < self.items.count {
+                self.items[indexPath.item].text = text
+            } else {
+                return
+            }
         }
         
-        self.bubbleItUpDelegate?.bubbleItUpViewDidChange?(self, text:text)
+        self.bubbleItUpDelegate?.bubbleItUpViewDidChange?(self, text:text, index:(self.indexPathForCell(cell)?.item)!)
     }
     
     internal func needUpdateLayout(cell: TFBubbleItUpViewCell) {
@@ -424,11 +438,11 @@ enum DataSourceOperationError: ErrorType {
             self.performBatchUpdates({ () -> Void in
                 let newLastIndexPath = NSIndexPath(forItem: self.items.count - 1, inSection: indexPath.section)
                 self.insertItemsAtIndexPaths([newLastIndexPath])
-                }) { (finished) -> Void in
-                    // Invalidate intrinsic size when done
-                    self.invalidateIntrinsicContentSize(nil)
-                    // The new cell should now become the first reponder
-                    //self.cellForItemAtIndexPath(newIndexPath)?.becomeFirstResponder()
+            }) { (finished) -> Void in
+                // Invalidate intrinsic size when done
+                self.invalidateIntrinsicContentSize(nil)
+                // The new cell should now become the first reponder
+                //self.cellForItemAtIndexPath(newIndexPath)?.becomeFirstResponder()
             }
         }
     }
@@ -442,21 +456,27 @@ enum DataSourceOperationError: ErrorType {
         
         if text == "" {
             
+            if indexPath.item >= self.items.count {
+                return
+            }
+            
             self.items.removeAtIndex(indexPath.item)
             
             // Update collectionView
             self.performBatchUpdates({ () -> Void in
                 self.deleteItemsAtIndexPaths([indexPath])
-                }) { (finished) -> Void in
-                    // Invalidate intrinsic size when done
-                    self.invalidateIntrinsicContentSize(nil)
-                    
-                    if self.items.count == 0 {
-                        self.placeholderLabel.hidden = false
-                    }
+            }) { (finished) -> Void in
+                // Invalidate intrinsic size when done
+                self.invalidateIntrinsicContentSize(nil)
+                
+                if self.items.count == 0 {
+                    self.placeholderLabel.hidden = false
+                }
             }
+            
+            self.bubbleItUpDelegate?.bubbleItUpViewDidDeleteBubbles(self, text: text, actualIndex:indexPath.item, otherIndex: -1)
         } else {
-            self.bubbleItUpDelegate?.bubbleItUpViewDidFinishEditingBubble(self, text: text)
+            self.bubbleItUpDelegate?.bubbleItUpViewDidFinishEditingBubble(self, text: text, index:indexPath.item)
         }
     }
     
@@ -480,7 +500,7 @@ enum DataSourceOperationError: ErrorType {
         
         do {
             try self.removeItemAtIndex(previousItemIndex) {
-                self.bubbleItUpDelegate?.bubbleItUpViewDidChange?(self, text:"")
+                self.bubbleItUpDelegate?.bubbleItUpViewDidDeleteBubbles(self, text:"", actualIndex:itemIndex, otherIndex: previousItemIndex)
             }
         } catch DataSourceOperationError.OutOfBounds {
             print("Error occured while removing item")
@@ -488,6 +508,21 @@ enum DataSourceOperationError: ErrorType {
             
         }
     }
+    
+    //private func updateCellIndex() {
+    //    // Update cell index
+    //    var temp : Int = 0
+    //    let to : Int = self.items.count
+    //
+    //    //print("updateCellIndex before %@", self.items)
+    //
+    //    for i in 0 ..< to {
+    //        self.items[i] = TFBubbleItem(text: self.items[i].text, becomeFirstResponder: false)
+    //        temp += 1
+    //    }
+    //
+    //    //print("updateCellIndex update %@", self.items)
+    //}
     
     // MARK: - Helpers
     
@@ -502,11 +537,10 @@ enum DataSourceOperationError: ErrorType {
         // Update collectionView
         self.performBatchUpdates({ () -> Void in
             self.deleteItemsAtIndexPaths([NSIndexPath(forItem: index, inSection: 0)])
-            
-            }) {[weak self] (finished) -> Void in
-                // Invalidate intrinsic size when done
-                self?.invalidateIntrinsicContentSize(nil)
-                completion?()
+        }) {[weak self] (finished) -> Void in
+            // Invalidate intrinsic size when done
+            self?.invalidateIntrinsicContentSize(nil)
+            completion?()
         }
     }
     
